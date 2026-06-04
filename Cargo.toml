@@ -1,0 +1,11 @@
+[package]
+name = "ternary-entropy"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Entropy analysis for ternary strategy distributions"
+repository = "https://github.com/SuperInstance/ternary-entropy"
+keywords = ["ternary", "entropy", "shannon", "information", "divergence"]
+categories = ["algorithms", "mathematics", "science"]
+
+[dependencies]
