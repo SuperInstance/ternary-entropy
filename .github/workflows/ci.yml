@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+          - nightly
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust ${{ matrix.toolchain }}
+      run: |
+        rustup toolchain install ${{ matrix.toolchain }} --profile minimal
+        rustup default ${{ matrix.toolchain }}
+
+    - name: Build (default features)
+      run: cargo build --verbose
+
+    - name: Build (no_std)
+      run: cargo build --verbose --no-default-features --features no_std
+
+    - name: Run tests
+      run: cargo test --verbose
+
+    - name: Run doc-tests
+      run: cargo test --doc --verbose
+
+    - name: Check formatting
+      run: |
+        rustup component add rustfmt
+        cargo fmt --check
+
+    - name: Run clippy
+      run: |
+        rustup component add clippy
+        cargo clippy -- -D warnings
+
+    - name: Build CLI
+      run: cargo build --verbose --features std
+
+    - name: CLI smoke test
+      run: |
+        echo "1 0 -1 1 0 1 -1 0 1 1" | \
+          cargo run --features std --bin ternary-entropy-cli -- --base bits
+        echo "1 0 -1 1 0 1 -1 0 1 1" | \
+          cargo run --features std --bin ternary-entropy-cli -- -w 3 --verbose
+
+  no-std-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install nightly
+      run: |
+        rustup toolchain install nightly --profile minimal -t thumbv7m-none-eabi
+    - name: Check no_std cross-compile
+      run: |
+        cargo build --no-default-features --features no_std \
+          --target thumbv7m-none-eabi --verbose
