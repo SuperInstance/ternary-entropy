@@ -137,6 +137,11 @@ pub struct JointDistribution {
 
 impl JointDistribution {
     /// Create from paired observations.
+    ///
+    /// Builds a 3×3 contingency table by counting observed `(A, B)` pairs and
+    /// normalizing by the total. An empty input yields an all-zero table, which
+    /// is **not** a valid distribution (`is_valid()` on its marginals returns
+    /// `false`) — callers should guard against empty input explicitly.
     pub fn from_pairs(pairs: &[(Ternary, Ternary)]) -> Self {
         let mut counts = [[0usize; 3]; 3];
         for (a, b) in pairs {
@@ -157,9 +162,15 @@ impl JointDistribution {
     }
 
     /// Create from explicit probabilities.
+    ///
+    /// Returns `None` unless the entries are all non-negative and sum to 1.0
+    /// within a tolerance of 1e-10 (consistent with `TernaryDistribution::new`).
     pub fn new(probs: [[f64; 3]; 3]) -> Option<Self> {
         let sum: f64 = probs.iter().flat_map(|r| r.iter()).sum();
         if (sum - 1.0).abs() > 1e-10 {
+            return None;
+        }
+        if probs.iter().flat_map(|r| r.iter()).any(|&p| p < 0.0) {
             return None;
         }
         Some(JointDistribution { probs })
