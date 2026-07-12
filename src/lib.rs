@@ -5,7 +5,6 @@
 
 #![forbid(unsafe_code)]
 
-
 /// Ternary value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Ternary {
@@ -44,12 +43,16 @@ impl TernaryDistribution {
         if p_pos < 0.0 || p_neg < 0.0 || p_neu < 0.0 {
             return None;
         }
-        Some(TernaryDistribution { probs: [p_pos, p_neg, p_neu] })
+        Some(TernaryDistribution {
+            probs: [p_pos, p_neg, p_neu],
+        })
     }
 
     /// Create a uniform distribution.
     pub fn uniform() -> Self {
-        TernaryDistribution { probs: [1.0 / 3.0; 3] }
+        TernaryDistribution {
+            probs: [1.0 / 3.0; 3],
+        }
     }
 
     /// Create from a sequence of ternary values.
@@ -64,10 +67,16 @@ impl TernaryDistribution {
         }
         let total = seq.len() as f64;
         if total == 0.0 {
-            return TernaryDistribution { probs: [1.0 / 3.0; 3] };
+            return TernaryDistribution {
+                probs: [1.0 / 3.0; 3],
+            };
         }
         TernaryDistribution {
-            probs: [counts[0] as f64 / total, counts[1] as f64 / total, counts[2] as f64 / total],
+            probs: [
+                counts[0] as f64 / total,
+                counts[1] as f64 / total,
+                counts[2] as f64 / total,
+            ],
         }
     }
 
@@ -112,7 +121,11 @@ pub fn max_entropy() -> f64 {
 pub fn normalized_entropy(dist: &TernaryDistribution) -> f64 {
     let h = shannon_entropy(dist);
     let max = max_entropy();
-    if max == 0.0 { 0.0 } else { h / max }
+    if max == 0.0 {
+        0.0
+    } else {
+        h / max
+    }
 }
 
 /// A joint distribution over pairs of ternary values.
@@ -159,11 +172,12 @@ impl JointDistribution {
 
     /// Marginal distribution of the first variable.
     pub fn marginal_first(&self) -> TernaryDistribution {
-        let mut p = [0.0; 3];
-        for i in 0..3 {
-            p[i] = self.probs[i].iter().sum();
-        }
-        TernaryDistribution { probs: p }
+        let probs = [
+            self.probs[0].iter().sum(),
+            self.probs[1].iter().sum(),
+            self.probs[2].iter().sum(),
+        ];
+        TernaryDistribution { probs }
     }
 
     /// Marginal distribution of the second variable.
@@ -179,7 +193,11 @@ impl JointDistribution {
     pub fn conditional_prob(&self, a: Ternary, b: Ternary) -> f64 {
         let i = idx(a);
         let pa = self.probs[i].iter().sum::<f64>();
-        if pa == 0.0 { 0.0 } else { self.probs[i][idx(b)] / pa }
+        if pa == 0.0 {
+            0.0
+        } else {
+            self.probs[i][idx(b)] / pa
+        }
     }
 }
 
@@ -196,7 +214,9 @@ pub fn conditional_entropy(joint: &JointDistribution) -> f64 {
     let mut h = 0.0;
     for a in Ternary::all() {
         let pa = joint.marginal_first().prob(a);
-        if pa <= 0.0 { continue; }
+        if pa <= 0.0 {
+            continue;
+        }
         for b in Ternary::all() {
             let p_ba = joint.conditional_prob(a, b);
             if p_ba > 0.0 {
