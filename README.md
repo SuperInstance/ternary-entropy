@@ -15,7 +15,7 @@ When you model decisions as three-valued signals—buy/hold/sell, agree/neutral/
 - **Conditional entropy H(B|A)** — How uncertain B remains after you know A. If H(B|A) = 0, then A completely determines B.
 - **Mutual information I(A;B)** — How many bits of information A and B share. Zero means they're independent.
 - **KL divergence D_KL(P‖Q)** — How different distribution P is from Q, measured in bits. Not symmetric; P is the "true" distribution, Q is the "model."
-- **Jensen-Shannon divergence** — A symmetric, smoothed version of KL divergence. Always finite. Bounded by log₂(3) for ternary distributions.
+- **Jensen-Shannon divergence** — A symmetric, smoothed version of KL divergence. Always finite. Bounded by 1 bit (log₂ 2); this bound is independent of alphabet size.
 - **Entropy rate** — The per-symbol uncertainty of a sequence, computed from conditional entropy of consecutive pairs.
 
 ## Quick Start
@@ -81,7 +81,7 @@ println!("Entropy over windows of 3: {:?}", trace);
 
 **Joint distributions.** `JointDistribution::from_pairs` builds a 3×3 contingency table from observed (A, B) pairs. Marginals are computed by summing rows or columns. Conditional probabilities P(B|A) divide the joint cell by the marginal of A.
 
-**Divergences.** KL divergence skips terms where either P or Q is zero (convention: 0·log(0) = 0). Jensen-Shannon uses the midpoint distribution M = (P+Q)/2 and averages KL(M‖P) and KL(M‖Q).
+**Divergences.** KL divergence skips terms where either P or Q is zero (convention: 0·log(0) = 0). Jensen-Shannon uses the midpoint distribution M = (P+Q)/2 and averages KL(P‖M) and KL(Q‖M) — note the direction: the data distribution points *into* the midpoint, which is what keeps the result always finite (M is non-zero wherever P or Q is).
 
 **Sliding entropy.** Applies a fixed-size window across the sequence and computes entropy at each position. Returns one value per window position.
 
