@@ -5,7 +5,6 @@
 
 #![forbid(unsafe_code)]
 
-
 /// Ternary value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Ternary {
@@ -44,12 +43,16 @@ impl TernaryDistribution {
         if p_pos < 0.0 || p_neg < 0.0 || p_neu < 0.0 {
             return None;
         }
-        Some(TernaryDistribution { probs: [p_pos, p_neg, p_neu] })
+        Some(TernaryDistribution {
+            probs: [p_pos, p_neg, p_neu],
+        })
     }
 
     /// Create a uniform distribution.
     pub fn uniform() -> Self {
-        TernaryDistribution { probs: [1.0 / 3.0; 3] }
+        TernaryDistribution {
+            probs: [1.0 / 3.0; 3],
+        }
     }
 
     /// Create from a sequence of ternary values.
@@ -64,10 +67,16 @@ impl TernaryDistribution {
         }
         let total = seq.len() as f64;
         if total == 0.0 {
-            return TernaryDistribution { probs: [1.0 / 3.0; 3] };
+            return TernaryDistribution {
+                probs: [1.0 / 3.0; 3],
+            };
         }
         TernaryDistribution {
-            probs: [counts[0] as f64 / total, counts[1] as f64 / total, counts[2] as f64 / total],
+            probs: [
+                counts[0] as f64 / total,
+                counts[1] as f64 / total,
+                counts[2] as f64 / total,
+            ],
         }
     }
 
@@ -112,7 +121,11 @@ pub fn max_entropy() -> f64 {
 pub fn normalized_entropy(dist: &TernaryDistribution) -> f64 {
     let h = shannon_entropy(dist);
     let max = max_entropy();
-    if max == 0.0 { 0.0 } else { h / max }
+    if max == 0.0 {
+        0.0
+    } else {
+        h / max
+    }
 }
 
 /// A joint distribution over pairs of ternary values.
@@ -124,6 +137,11 @@ pub struct JointDistribution {
 
 impl JointDistribution {
     /// Create from paired observations.
+    ///
+    /// Builds a 3×3 contingency table by counting observed `(A, B)` pairs and
+    /// normalizing by the total. An empty input yields an all-zero table, which
+    /// is **not** a valid distribution (`is_valid()` on its marginals returns
+    /// `false`) — callers should guard against empty input explicitly.
     pub fn from_pairs(pairs: &[(Ternary, Ternary)]) -> Self {
         let mut counts = [[0usize; 3]; 3];
         for (a, b) in pairs {
@@ -144,9 +162,15 @@ impl JointDistribution {
     }
 
     /// Create from explicit probabilities.
+    ///
+    /// Returns `None` unless the entries are all non-negative and sum to 1.0
+    /// within a tolerance of 1e-10 (consistent with `TernaryDistribution::new`).
     pub fn new(probs: [[f64; 3]; 3]) -> Option<Self> {
         let sum: f64 = probs.iter().flat_map(|r| r.iter()).sum();
         if (sum - 1.0).abs() > 1e-10 {
+            return None;
+        }
+        if probs.iter().flat_map(|r| r.iter()).any(|&p| p < 0.0) {
             return None;
         }
         Some(JointDistribution { probs })
@@ -159,11 +183,12 @@ impl JointDistribution {
 
     /// Marginal distribution of the first variable.
     pub fn marginal_first(&self) -> TernaryDistribution {
-        let mut p = [0.0; 3];
-        for i in 0..3 {
-            p[i] = self.probs[i].iter().sum();
-        }
-        TernaryDistribution { probs: p }
+        let probs = [
+            self.probs[0].iter().sum(),
+            self.probs[1].iter().sum(),
+            self.probs[2].iter().sum(),
+        ];
+        TernaryDistribution { probs }
     }
 
     /// Marginal distribution of the second variable.
@@ -179,7 +204,11 @@ impl JointDistribution {
     pub fn conditional_prob(&self, a: Ternary, b: Ternary) -> f64 {
         let i = idx(a);
         let pa = self.probs[i].iter().sum::<f64>();
-        if pa == 0.0 { 0.0 } else { self.probs[i][idx(b)] / pa }
+        if pa == 0.0 {
+            0.0
+        } else {
+            self.probs[i][idx(b)] / pa
+        }
     }
 }
 
@@ -196,7 +225,9 @@ pub fn conditional_entropy(joint: &JointDistribution) -> f64 {
     let mut h = 0.0;
     for a in Ternary::all() {
         let pa = joint.marginal_first().prob(a);
-        if pa <= 0.0 { continue; }
+        if pa <= 0.0 {
+            continue;
+        }
         for b in Ternary::all() {
             let p_ba = joint.conditional_prob(a, b);
             if p_ba > 0.0 {
@@ -479,5 +510,156 @@ mod tests {
         let cp = j.conditional_prob(Ternary::Positive, Ternary::Negative);
         let expected = 0.1 / 0.3;
         assert!((cp - expected).abs() < 1e-10);
+    }
+
+    // ---- Branch coverage for validation / degenerate paths ----
+
+    #[test]
+    fn test_distribution_new_sum_zero_is_none() {
+        // All-zero probs: sum == 0.0 hits the `sum <= 0.0` rejection branch.
+        assert!(TernaryDistribution::new(0.0, 0.0, 0.0).is_none());
+    }
+
+    #[test]
+    fn test_joint_new_invalid_sum_is_none() {
+        // Entries do not sum to 1.0 -> rejected.
+        assert!(
+            JointDistribution::new([[0.5, 0.5, 0.0], [0.5, 0.5, 0.0], [0.0, 0.0, 0.0]]).is_none()
+        );
+    }
+
+    #[test]
+    fn test_joint_new_negative_is_none() {
+        // Sum is 1.0 but contains a negative entry -> must be rejected
+        // (regression for the validation added in this hardening pass).
+        assert!(
+            JointDistribution::new([[-0.5, 0.5, 0.0], [0.5, 0.5, 0.0], [0.0, 0.0, 0.0]]).is_none()
+        );
+    }
+
+    #[test]
+    fn test_joint_from_pairs_empty_is_degenerate() {
+        // Documented behavior: empty input yields an all-zero table whose
+        // marginals are NOT a valid distribution.
+        let j = JointDistribution::from_pairs(&[]);
+        assert!(!j.marginal_first().is_valid());
+        assert!(!j.marginal_second().is_valid());
+        assert!((joint_entropy(&j)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_conditional_prob_zero_marginal() {
+        // Row with zero mass -> marginal P(A) == 0 -> conditional returns 0.0.
+        let probs = [[0.0, 0.0, 0.0], [0.5, 0.0, 0.0], [0.0, 0.5, 0.0]];
+        let j = JointDistribution::new(probs).unwrap();
+        assert_eq!(
+            j.conditional_prob(Ternary::Positive, Ternary::Negative),
+            0.0
+        );
+    }
+
+    #[test]
+    fn test_sliding_entropy_window_equals_len() {
+        // window_size == seq.len() -> exactly one window over the whole sequence.
+        let seq = vec![Ternary::Positive, Ternary::Negative, Ternary::Neutral];
+        let result = sliding_entropy(&seq, 3);
+        assert_eq!(result.len(), 1);
+        // The single window IS the uniform distribution -> max entropy log2(3).
+        assert!((result[0] - 3.0_f64.log2()).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_sliding_entropy_zero_window_is_empty() {
+        let seq = vec![Ternary::Positive, Ternary::Negative];
+        assert!(sliding_entropy(&seq, 0).is_empty());
+    }
+
+    #[test]
+    fn test_kl_divergence_skips_zero_q_terms() {
+        // P has mass where Q is zero. Standard def is +inf, but the documented
+        // implementation skips those terms and returns a finite partial sum.
+        let p = TernaryDistribution::new(0.5, 0.5, 0.0).unwrap();
+        let q = TernaryDistribution::new(0.0, 0.5, 0.5).unwrap();
+        let kl = kl_divergence(&p, &q);
+        // Only the shared Positive-vs... none; only index 1 overlaps:
+        // 0.5 * log2(0.5/0.5) = 0.0
+        assert!(kl.is_finite());
+        assert!((kl - 0.0).abs() < 1e-12);
+    }
+
+    // ---- Numerical verification against known-correct results ----
+
+    #[test]
+    fn test_shannon_entropy_known_value() {
+        // H([0.5, 0.25, 0.25]) = 0.5*1 + 0.25*2 + 0.25*2 = 1.5 bits (hand-computed).
+        let d = TernaryDistribution::new(0.5, 0.25, 0.25).unwrap();
+        assert!((shannon_entropy(&d) - 1.5).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_normalized_entropy_deterministic_is_zero() {
+        let d = TernaryDistribution::new(0.0, 1.0, 0.0).unwrap();
+        assert!((normalized_entropy(&d) - 0.0).abs() < 1e-10);
+        let uniform = TernaryDistribution::uniform();
+        assert!((normalized_entropy(&uniform) - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_js_divergence_bounded_by_one_bit() {
+        // The tight bound for JS (base 2) is 1 bit, independent of alphabet
+        // size. Verify several pairs, including maximal separation.
+        let extreme_a = TernaryDistribution::new(1.0, 0.0, 0.0).unwrap();
+        let extreme_b = TernaryDistribution::new(0.0, 1.0, 0.0).unwrap();
+        let js_max = js_divergence(&extreme_a, &extreme_b);
+        assert!(
+            (js_max - 1.0).abs() < 1e-10,
+            "JS of maximally separated dists should be exactly 1.0, got {js_max}"
+        );
+
+        let p = TernaryDistribution::new(0.9, 0.05, 0.05).unwrap();
+        let q = TernaryDistribution::new(0.05, 0.9, 0.05).unwrap();
+        let js = js_divergence(&p, &q);
+        assert!(js <= 1.0 + 1e-12, "JS must not exceed 1 bit, got {js}");
+        assert!(js > 0.0);
+    }
+
+    #[test]
+    fn test_js_divergence_identical_is_zero() {
+        let p = TernaryDistribution::new(0.2, 0.3, 0.5).unwrap();
+        assert!((js_divergence(&p, &p)).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_mutual_information_nonnegativity() {
+        // I(A;B) >= 0 always (information-theoretic identity). Sample several
+        // joints and confirm none dip below zero beyond float noise.
+        let cases: [[[f64; 3]; 3]; 3] = [
+            [[1.0 / 9.0; 3]; 3], // independent -> 0
+            // Perfectly correlated, normalized to sum 1.0 (1/3 on the diagonal).
+            [
+                [1.0 / 3.0, 0.0, 0.0],
+                [0.0, 1.0 / 3.0, 0.0],
+                [0.0, 0.0, 1.0 / 3.0],
+            ],
+            [[0.2, 0.1, 0.0], [0.0, 0.3, 0.1], [0.1, 0.0, 0.2]], // mixed
+        ];
+        for probs in cases {
+            let j = JointDistribution::new(probs).unwrap();
+            let mi = mutual_information(&j);
+            assert!(mi >= -1e-12, "mutual information must be >= 0, got {mi}");
+        }
+    }
+
+    #[test]
+    fn test_cross_entropy_respects_gibbs_inequality() {
+        // Gibbs' inequality: H(P,Q) >= H(P), with equality iff P == Q.
+        let p = TernaryDistribution::new(0.7, 0.2, 0.1).unwrap();
+        let q = TernaryDistribution::uniform();
+        let ce = cross_entropy(&p, &q);
+        let hp = shannon_entropy(&p);
+        assert!(
+            ce >= hp - 1e-12,
+            "cross-entropy {ce} should be >= H(P) {hp}"
+        );
     }
 }
